@@ -1,0 +1,17 @@
+This is the initial concept for developing a soccer Results Predictor for the World Cup 2026.
+
+for an accurate prediction, i want the following info:
+ 1. The Team Elos, ideally, i want a rating for each present team in the world cup respectively. The ratings include:
+	1.1. An overall rating
+	1.2. Defensive rating 
+	1.3. Offensive rating
+ ... Other ratings may follow
+
+ 2. past match results, goals scored, goals allowed.
+ 3. I want to use the odds given to the teams in any match before start compared to the final result by betting websites, tipico or other official betting websites which have that data available online
+
+ 4. Recent form, rest days, travel, Injuries, suspensions, lineups
+ 5. (for later, advanced): Weather, venue, referee
+ 6. Anything i might be missing? You tell me what else i can use for a more accurate prediction.
+
+End goal: I understand, that we will only be able to calculate chances and odds, but i want to see if we can have a model that can reliably have wins, even when there may be losses, the win should be more than the loss.

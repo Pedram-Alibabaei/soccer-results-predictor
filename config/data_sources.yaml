@@ -1,0 +1,47 @@
+sources:
+  football_data_uk:
+    url: "https://www.football-data.co.uk/data.php"
+    role: "Historical results, match stats, and bookmaker odds."
+    priority: "high"
+
+  world_football_elo:
+    url: "https://eloratings.net/"
+    role: "National-team Elo ratings for men's international football."
+    priority: "high"
+
+  fifa_mens_world_ranking:
+    url: "https://inside.fifa.com/fifa-world-ranking/men"
+    role: "Official FIFA men's national-team ranking; useful as a secondary rating signal."
+    priority: "high"
+
+  international_results:
+    url: "https://github.com/martj42/international_results"
+    role: "Historical men's international match results."
+    priority: "high"
+
+  football_data_uk_world_cup_qualifying:
+    url: "https://www.football-data.co.uk/data.php"
+    role: "Some historical football results and betting odds; especially useful for odds/backtesting formats."
+    priority: "medium"
+
+  ea_official_ratings:
+    url: "https://www.ea.com/games/ea-sports-fc/ratings"
+    role: "Official EA Sports FC player ratings reference."
+    priority: "medium"
+    note: "Useful as a reference source; not assumed to be a bulk data API."
+
+  fifa_index:
+    url: "https://fifaindex.com/"
+    role: "Browsable EA/FIFA-style player and team ratings."
+    priority: "medium"
+
+  sofifa:
+    url: "https://sofifa.com/"
+    role: "Detailed EA/FIFA-style player and team ratings."
+    priority: "medium"
+    note: "Check usage terms before automated collection."
+
+  kaggle_ea_fc_datasets:
+    url: "https://www.kaggle.com/search?q=EA+FC+player+ratings"
+    role: "Community datasets for experiments and historical player ratings."
+    priority: "medium"
