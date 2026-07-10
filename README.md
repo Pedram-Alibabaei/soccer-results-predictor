@@ -76,20 +76,46 @@ tests/          automated tests
 
 Generated datasets, trained model files, cache files, and bulky CSV backtest outputs are intentionally ignored by Git. The code and documentation are versioned; large or source-specific data should be rebuilt locally with the scripts below.
 
+## Development Setup
+
+Create a local virtual environment and install the package with its dev tools
+(`pytest`, `ruff`). A `Makefile` wraps the common commands:
+
+```bash
+make install        # python3 -m venv .venv && pip install -e ".[dev]"
+make test           # run the test suite
+make lint           # run ruff
+make demo           # run the market-pricing demo (no data download)
+```
+
+The equivalent raw commands, if you prefer not to use `make`:
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install -e ".[dev]"
+.venv/bin/pytest
+```
+
+`pyproject.toml` sets `pythonpath = ["src", "."]` for pytest, so the tests run
+without exporting `PYTHONPATH` manually. Continuous integration runs the linter
+and the test suite on every push and pull request (see `.github/workflows/ci.yml`).
+
 ## Run The First Demo
 
-From this folder:
+From this folder (bash / macOS / Linux):
 
-```powershell
-$env:PYTHONPATH = "src"
-python scripts\build_dataset.py
-python scripts\evaluate_holdout.py --holdout world_cup_2018
-python scripts\evaluate_holdout.py --holdout world_cup_2018 --model poisson --learning-rate 0.03
-python scripts\evaluate_holdout.py --holdout world_cup_2018 --model draw_poisson --learning-rate 0.03
-python scripts\evaluate_holdout.py --holdout world_cup_2018 --model poisson --learning-rate 0.03 --target clean_3way
-python examples\market_demo.py
+```bash
+export PYTHONPATH=src
+python scripts/build_dataset.py
+python scripts/evaluate_holdout.py --holdout world_cup_2018
+python scripts/evaluate_holdout.py --holdout world_cup_2018 --model poisson --learning-rate 0.03
+python scripts/evaluate_holdout.py --holdout world_cup_2018 --model draw_poisson --learning-rate 0.03
+python scripts/evaluate_holdout.py --holdout world_cup_2018 --model poisson --learning-rate 0.03 --target clean_3way
+python examples/market_demo.py
 python -m unittest discover -s tests
 ```
+
+On Windows PowerShell, use `$env:PYTHONPATH = "src"` and `\` path separators.
 
 ## Free Club Odds Backtest
 

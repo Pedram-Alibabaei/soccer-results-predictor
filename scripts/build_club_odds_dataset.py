@@ -8,7 +8,6 @@ import pandas as pd
 from soccer_predictor.club_data import (
     DEFAULT_LEAGUES,
     DEFAULT_SEASON_START_YEARS,
-    LeagueConfig,
     build_club_odds_dataset,
     summarize_club_dataset,
 )

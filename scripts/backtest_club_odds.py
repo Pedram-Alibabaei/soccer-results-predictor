@@ -16,8 +16,6 @@ from soccer_predictor.modeling import (
     frame_to_markdown,
 )
 from soccer_predictor.odds import (
-    OVER_UNDER_25_ODDS_COLUMNS,
-    THREE_WAY_ODDS_COLUMNS,
     actual_over_under_2_5,
     bookmaker_probabilities,
     complete_odds_mask,
