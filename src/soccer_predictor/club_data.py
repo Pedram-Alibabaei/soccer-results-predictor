@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 from urllib.error import HTTPError, URLError
@@ -411,7 +411,7 @@ def write_club_metadata(
     season_start_years: tuple[int, ...],
 ) -> None:
     metadata = {
-        "created_at_utc": datetime.now(UTC).isoformat(),
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "source": {
             "name": "Football-Data.co.uk",
             "base_url": FOOTBALL_DATA_BASE_URL,

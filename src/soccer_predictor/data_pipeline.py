@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from datetime import UTC, datetime
+from datetime import datetime, timezone
 import json
 from pathlib import Path
 from urllib.request import urlretrieve
@@ -489,7 +489,7 @@ def _write_metadata(
 ) -> None:
     config = split_config or DatasetSplitConfig()
     metadata = {
-        "created_at_utc": datetime.now(UTC).isoformat(),
+        "created_at_utc": datetime.now(timezone.utc).isoformat(),
         "source": {
             "name": "martj42/international_results",
             "url": INTERNATIONAL_RESULTS_URL,
