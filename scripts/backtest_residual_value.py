@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 from math import isinf
 from pathlib import Path
 
@@ -75,8 +76,36 @@ def parse_args() -> argparse.Namespace:
     )
     parser.add_argument("--stake", type=float, default=1.0)
     parser.add_argument("--max-odds", type=float, default=4.0)
+    parser.add_argument(
+        "--selection-mode",
+        choices=("value", "conservative"),
+        default="value",
+        help="Rank eligible bets by expected edge or by predicted win probability.",
+    )
+    parser.add_argument(
+        "--conservative-min-probability",
+        type=float,
+        default=0.55,
+        help="Minimum predicted win probability in conservative mode.",
+    )
+    parser.add_argument(
+        "--conservative-max-odds",
+        type=float,
+        default=2.5,
+        help="Additional odds cap in conservative mode.",
+    )
     parser.add_argument("--max-bets-per-weekend", type=int, default=3)
     parser.add_argument("--min-validation-bets", type=int, default=50)
+    parser.add_argument(
+        "--holdout-league",
+        default=None,
+        help="Develop on all other leagues and test only this league code.",
+    )
+    parser.add_argument(
+        "--report-subdir",
+        default="",
+        help="Optional folder below reports for detailed run artifacts.",
+    )
     parser.add_argument(
         "--thresholds",
         default="0,0.01,0.02,0.03,0.05,0.08,0.10,0.15,0.20",
@@ -100,9 +129,27 @@ def main() -> None:
         )
 
     data = pd.read_csv(dataset_path, parse_dates=["date"], low_memory=False)
+    available_leagues = set(data["league_code"].dropna().astype(str))
+    if args.holdout_league and args.holdout_league not in available_leagues:
+        raise ValueError(
+            f"Unknown holdout league {args.holdout_league!r}; available: {sorted(available_leagues)}"
+        )
+    development_data = (
+        data[data["league_code"] != args.holdout_league].copy()
+        if args.holdout_league
+        else data
+    )
     validation_season = args.validation_season or args.test_season - 1
     thresholds = parse_thresholds(args.thresholds)
     clv_thresholds = parse_thresholds(args.clv_thresholds)
+    selection_min_probability = (
+        args.conservative_min_probability if args.selection_mode == "conservative" else None
+    )
+    selection_max_odds = (
+        min(args.max_odds, args.conservative_max_odds)
+        if args.selection_mode == "conservative"
+        else args.max_odds
+    )
     half_life_days = None if args.half_life_days <= 0 else args.half_life_days
     odds_columns_by_market = {
         "1x2": odds_columns_for_market("1x2", args.odds_timing),
@@ -110,7 +157,7 @@ def main() -> None:
     }
 
     value_train_candidates, training_detail = build_walk_forward_candidates(
-        data,
+        development_data,
         candidate_seasons=[
             season
             for season in sorted(data["season_start_year"].unique())
@@ -142,7 +189,7 @@ def main() -> None:
         )
 
     validation_candidates, validation_model_name = candidates_for_season(
-        data,
+        development_data,
         season=validation_season,
         odds_columns_by_market=odds_columns_by_market,
         args=args,
@@ -157,8 +204,10 @@ def main() -> None:
         edge_column="value_edge",
         probability_column="value_probability",
         stake=args.stake,
-        max_decimal_odds=args.max_odds,
+        max_decimal_odds=selection_max_odds,
         max_bets_per_weekend=args.max_bets_per_weekend,
+        selection_mode=args.selection_mode,
+        min_probability=selection_min_probability,
     )
     validation_combined_summary = pd.DataFrame()
     if clv_model is not None:
@@ -169,8 +218,10 @@ def main() -> None:
             edge_column="value_edge",
             probability_column="value_probability",
             stake=args.stake,
-            max_decimal_odds=args.max_odds,
+            max_decimal_odds=selection_max_odds,
             max_bets_per_weekend=args.max_bets_per_weekend,
+            selection_mode=args.selection_mode,
+            min_probability=selection_min_probability,
         )
         chosen_threshold, chosen_clv_threshold = choose_combined_threshold(
             validation_combined_summary,
@@ -189,6 +240,12 @@ def main() -> None:
         odds_columns_by_market=odds_columns_by_market,
         args=args,
         half_life_days=half_life_days,
+        train_league_codes=(
+            set(development_data["league_code"].astype(str).unique())
+            if args.holdout_league
+            else None
+        ),
+        test_league_codes={args.holdout_league} if args.holdout_league else None,
     )
     test_scored = residual_model.score_candidates(test_candidates)
     if clv_model is not None:
@@ -199,8 +256,10 @@ def main() -> None:
         edge_column="value_edge",
         probability_column="value_probability",
         stake=args.stake,
-        max_decimal_odds=args.max_odds,
+        max_decimal_odds=selection_max_odds,
         max_bets_per_weekend=args.max_bets_per_weekend,
+        selection_mode=args.selection_mode,
+        min_probability=selection_min_probability,
     )
     test_combined_summary = (
         summarize_combined_thresholds(
@@ -210,8 +269,10 @@ def main() -> None:
             edge_column="value_edge",
             probability_column="value_probability",
             stake=args.stake,
-            max_decimal_odds=args.max_odds,
+            max_decimal_odds=selection_max_odds,
             max_bets_per_weekend=args.max_bets_per_weekend,
+            selection_mode=args.selection_mode,
+            min_probability=selection_min_probability,
         )
         if clv_model is not None
         else pd.DataFrame()
@@ -222,8 +283,10 @@ def main() -> None:
         edge_column="raw_edge",
         probability_column="model_probability",
         stake=args.stake,
-        max_decimal_odds=args.max_odds,
+        max_decimal_odds=selection_max_odds,
         max_bets_per_weekend=args.max_bets_per_weekend,
+        selection_mode=args.selection_mode,
+        min_probability=selection_min_probability,
     )
     selected = (
         select_value_bets(
@@ -232,8 +295,10 @@ def main() -> None:
             stake=args.stake,
             edge_column="value_edge",
             probability_column="value_probability",
-            max_decimal_odds=args.max_odds,
+            max_decimal_odds=selection_max_odds,
             max_bets_per_weekend=args.max_bets_per_weekend,
+            selection_mode=args.selection_mode,
+            min_probability=selection_min_probability,
             secondary_probability_column="clv_model_probability" if clv_model is not None else None,
             min_secondary_probability=chosen_clv_threshold if clv_model is not None else None,
         )
@@ -248,14 +313,23 @@ def main() -> None:
     )
 
     report_dir = args.project_root / "reports"
+    if args.report_subdir:
+        report_dir = report_dir / args.report_subdir
     report_dir.mkdir(parents=True, exist_ok=True)
     filter_slug = "residual_value_clvmodel" if args.use_clv_model else "residual_value"
+    scope_slug = (
+        f"holdout_{args.holdout_league}"
+        if args.holdout_league
+        else f"{data['league_code'].nunique()}leagues"
+    )
     report_stem = (
         f"club_odds_{args.test_season}_{args.base_model}_{args.odds_timing}"
-        f"_maxodds_{format_slug(args.max_odds)}_top{args.max_bets_per_weekend}_{filter_slug}"
+        f"_{scope_slug}_{args.selection_mode}_maxodds_{format_slug(selection_max_odds)}"
+        f"_top{args.max_bets_per_weekend}_{filter_slug}"
     )
     report_path = report_dir / f"{report_stem}_report.md"
     bets_path = report_dir / f"{report_stem}_bets.csv"
+    summary_path = report_dir / f"{report_stem}_summary.json"
     selected.to_csv(bets_path, index=False)
     write_report(
         report_path,
@@ -288,7 +362,10 @@ def main() -> None:
     print("Backtested residual value model")
     print(f"  base model: {test_model_name}")
     print(f"  odds timing: {args.odds_timing}")
-    print(f"  max odds: {args.max_odds:.2f}")
+    print(f"  selection mode: {args.selection_mode}")
+    print(f"  max odds: {selection_max_odds:.2f}")
+    if selection_min_probability is not None:
+        print(f"  minimum win probability: {selection_min_probability:.2%}")
     print(f"  max bets per weekend: {args.max_bets_per_weekend}")
     print(f"  value train candidates: {len(value_train_candidates)}")
     if clv_model is not None:
@@ -300,11 +377,47 @@ def main() -> None:
     print(f"  selected bets: {summary['bets']}")
     print(f"  profit: {summary['profit']:.2f}")
     print(f"  ROI: {summary['roi']:.2%}")
+    print(f"  hit rate: {summary['hit_rate']:.2%}")
     clv = summarize_clv(selected)
+    summary_path.write_text(
+        json.dumps(
+            {
+                "test_season": args.test_season,
+                "validation_season": validation_season,
+                "selection_mode": args.selection_mode,
+                "holdout_league": args.holdout_league,
+                "dataset_leagues": int(data["league_code"].nunique()),
+                "development_leagues": int(development_data["league_code"].nunique()),
+                "odds_timing": args.odds_timing,
+                "max_odds": selection_max_odds,
+                "min_probability": selection_min_probability,
+                "max_bets_per_weekend": args.max_bets_per_weekend,
+                "chosen_edge_threshold": None if isinf(chosen_threshold) else chosen_threshold,
+                "wins": int(selected["won"].sum()) if not selected.empty else 0,
+                "positive_clv_bets": (
+                    int((selected["clv_decimal"] > 0).sum())
+                    if not selected.empty and "clv_decimal" in selected
+                    else 0
+                ),
+                **summary,
+                **{
+                    "with_closing_odds": clv["with_closing_odds"],
+                    "positive_clv_rate": clv["positive_clv_rate"],
+                    "avg_decimal_clv": clv["avg_decimal_clv"],
+                    "avg_probability_clv": clv["avg_probability_clv"],
+                },
+                "report_path": str(report_path),
+                "bets_path": str(bets_path),
+            },
+            indent=2,
+        ),
+        encoding="utf-8",
+    )
     print(f"  positive CLV rate: {clv['positive_clv_rate']:.2%}")
     print(f"  avg decimal CLV: {clv['avg_decimal_clv']:.2%}")
     print(f"  report: {report_path}")
     print(f"  bets: {bets_path}")
+    print(f"  summary: {summary_path}")
 
 
 def build_walk_forward_candidates(
@@ -353,9 +466,15 @@ def candidates_for_season(
     odds_columns_by_market: dict[str, dict[str, str]],
     args: argparse.Namespace,
     half_life_days: float | None,
+    train_league_codes: set[str] | None = None,
+    test_league_codes: set[str] | None = None,
 ) -> tuple[pd.DataFrame, str]:
-    train = data[data["season_start_year"] < season].copy()
-    test = data[data["season_start_year"] == season].copy()
+    train, test = split_season_data(
+        data,
+        season=season,
+        train_league_codes=train_league_codes,
+        test_league_codes=test_league_codes,
+    )
     if train.empty or test.empty:
         raise ValueError(f"Need train and test rows for season {season}.")
 
@@ -377,6 +496,22 @@ def candidates_for_season(
     candidates = build_bet_candidates(test, probabilities_by_market, odds_columns_by_market)
     candidates["base_model"] = model_name
     return candidates, model_name
+
+
+def split_season_data(
+    data: pd.DataFrame,
+    *,
+    season: int,
+    train_league_codes: set[str] | None = None,
+    test_league_codes: set[str] | None = None,
+) -> tuple[pd.DataFrame, pd.DataFrame]:
+    train = data[data["season_start_year"] < season].copy()
+    test = data[data["season_start_year"] == season].copy()
+    if train_league_codes is not None:
+        train = train[train["league_code"].astype(str).isin(train_league_codes)].copy()
+    if test_league_codes is not None:
+        test = test[test["league_code"].astype(str).isin(test_league_codes)].copy()
+    return train, test
 
 
 def fit_base_model(
@@ -454,6 +589,14 @@ def write_report(
     selected: pd.DataFrame,
     bets_path: Path,
 ) -> None:
+    selection_max_odds = (
+        min(args.max_odds, args.conservative_max_odds)
+        if args.selection_mode == "conservative"
+        else args.max_odds
+    )
+    selection_min_probability = (
+        args.conservative_min_probability if args.selection_mode == "conservative" else None
+    )
     chosen_text = "no-bet" if isinf(chosen_threshold) else f"{chosen_threshold:.3f}"
     chosen_clv_text = (
         "disabled"
@@ -502,7 +645,10 @@ def write_report(
         f"- Test season: {args.test_season}",
         f"- Validation season: {args.validation_season or args.test_season - 1}",
         f"- Odds timing: {args.odds_timing}",
-        f"- Max odds: {args.max_odds:.2f}",
+        f"- League scope: {'hold out ' + args.holdout_league if args.holdout_league else 'all leagues'}",
+        f"- Selection mode: {args.selection_mode}",
+        f"- Max odds: {selection_max_odds:.2f}",
+        f"- Minimum win probability: {selection_min_probability or 0.0:.2%}",
         f"- Max bets per weekend: {args.max_bets_per_weekend}",
         f"- Base model: {base_model_name}",
         f"- Validation base model: {validation_model_name}",

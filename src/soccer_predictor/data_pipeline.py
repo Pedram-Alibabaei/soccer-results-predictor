@@ -291,7 +291,7 @@ def add_world_cup_context(matches: pd.DataFrame) -> pd.DataFrame:
             ["date", "match_id"],
             kind="mergesort",
         ).index
-        match_count = len(ordered_index)
+        match_count = _expected_world_cup_match_count(int(year), len(ordered_index))
         for position, row_index in enumerate(ordered_index, start=1):
             stage = _world_cup_stage(position, match_count)
             group_matchday = _world_cup_group_matchday(position, match_count, stage)
@@ -531,6 +531,21 @@ def _write_metadata(
 
 
 def _world_cup_stage(match_number: int, match_count: int) -> str:
+    if match_count >= 104:
+        if match_number <= 72:
+            return "group"
+        if match_number <= 88:
+            return "round_of_32"
+        if match_number <= 96:
+            return "round_of_16"
+        if match_number <= 100:
+            return "quarter_final"
+        if match_number <= 102:
+            return "semi_final"
+        if match_number == 103:
+            return "third_place"
+        return "final"
+
     if match_count >= 64:
         if match_number <= 48:
             return "group"
@@ -563,9 +578,17 @@ def _world_cup_stage(match_number: int, match_count: int) -> str:
     return "group"
 
 
+def _expected_world_cup_match_count(year: int, completed_match_count: int) -> int:
+    if year >= 2026 and completed_match_count > 64:
+        return 104
+    return completed_match_count
+
+
 def _world_cup_group_matchday(match_number: int, match_count: int, stage: str) -> int:
     if stage != "group":
         return 0
+    if match_count >= 104:
+        return min(((match_number - 1) // 24) + 1, 3)
     if match_count >= 64:
         return min(((match_number - 1) // 16) + 1, 3)
     if match_count == 52:

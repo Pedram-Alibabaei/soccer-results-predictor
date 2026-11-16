@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import exp, inf
+from math import comb, exp, inf, lgamma, log
 from typing import Iterator, Mapping
 
 
@@ -83,6 +83,79 @@ def score_matrix(
             ]
             for home_goals, row in enumerate(matrix)
         ]
+
+    if normalize:
+        total = sum(sum(row) for row in matrix)
+        matrix = [[probability / total for probability in row] for row in matrix]
+
+    return ScoreProbabilityTable(
+        home_team=home_team,
+        away_team=away_team,
+        max_goals=max_goals,
+        probabilities=tuple(tuple(row) for row in matrix),
+    )
+
+
+def negative_binomial_score_matrix(
+    home_expected_goals: float,
+    away_expected_goals: float,
+    *,
+    dispersion: float,
+    max_goals: int = 15,
+    home_team: str = "Home",
+    away_team: str = "Away",
+    normalize: bool = True,
+) -> ScoreProbabilityTable:
+    """Build an overdispersed score table from a Negative Binomial total.
+
+    The total-goals variance is ``mean + dispersion * mean**2``. Conditional
+    on that total, goals are split between the teams according to their share
+    of expected goals. A zero dispersion reduces to independent Poisson goals.
+    """
+
+    if home_expected_goals < 0 or away_expected_goals < 0:
+        raise ValueError("Expected goals must be non-negative.")
+    if dispersion < 0:
+        raise ValueError("Dispersion must be non-negative.")
+    if max_goals < 1:
+        raise ValueError("max_goals must be at least 1.")
+    if dispersion <= 1e-12:
+        return score_matrix(
+            home_expected_goals,
+            away_expected_goals,
+            max_goals=max_goals,
+            home_team=home_team,
+            away_team=away_team,
+            normalize=normalize,
+        )
+
+    total_mean = home_expected_goals + away_expected_goals
+    if total_mean <= 1e-12:
+        matrix = [[0.0 for _ in range(max_goals + 1)] for _ in range(max_goals + 1)]
+        matrix[0][0] = 1.0
+    else:
+        shape = 1.0 / dispersion
+        success_probability = shape / (shape + total_mean)
+        home_share = home_expected_goals / total_mean
+        matrix = []
+        for home_goals in range(max_goals + 1):
+            row = []
+            for away_goals in range(max_goals + 1):
+                total_goals = home_goals + away_goals
+                log_total_probability = (
+                    lgamma(total_goals + shape)
+                    - lgamma(shape)
+                    - lgamma(total_goals + 1)
+                    + (shape * log(success_probability))
+                    + (total_goals * log(1.0 - success_probability))
+                )
+                split_probability = _binomial_split_probability(
+                    total_goals,
+                    home_goals,
+                    home_share,
+                )
+                row.append(exp(log_total_probability) * split_probability)
+            matrix.append(row)
 
     if normalize:
         total = sum(sum(row) for row in matrix)
@@ -259,6 +332,17 @@ def _poisson_probabilities(rate: float, max_goals: int) -> list[float]:
     for goals in range(1, max_goals + 1):
         probabilities.append(probabilities[-1] * rate / goals)
     return probabilities
+
+
+def _binomial_split_probability(total_goals: int, home_goals: int, home_share: float) -> float:
+    away_goals = total_goals - home_goals
+    if home_share <= 0:
+        return 1.0 if home_goals == 0 else 0.0
+    if home_share >= 1:
+        return 1.0 if away_goals == 0 else 0.0
+    return comb(total_goals, home_goals) * (home_share**home_goals) * (
+        (1.0 - home_share) ** away_goals
+    )
 
 
 def _dixon_coles_adjustment(

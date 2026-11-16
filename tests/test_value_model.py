@@ -105,6 +105,39 @@ class ValueModelTests(unittest.TestCase):
         self.assertIn("min_clv_model_probability", summary.columns)
         self.assertGreater(len(selected), 0)
 
+    def test_value_mode_ranks_by_edge_and_conservative_mode_by_probability(self):
+        candidates = pd.DataFrame(
+            [
+                {**_candidate(1, "1x2", "1", True, 0.60, 0.50, 2.0), "value_probability": 0.60, "value_edge": 0.20},
+                {**_candidate(2, "1x2", "1", False, 0.45, 0.30, 3.0), "value_probability": 0.45, "value_edge": 0.35},
+            ]
+        )
+
+        value = select_value_bets(
+            candidates,
+            min_edge=0.0,
+            max_bets_per_weekend=1,
+            selection_mode="value",
+        )
+        conservative = select_value_bets(
+            candidates,
+            min_edge=0.0,
+            max_bets_per_weekend=1,
+            selection_mode="conservative",
+            min_probability=0.55,
+        )
+
+        self.assertEqual(value.iloc[0]["match_id"], 2)
+        self.assertEqual(conservative.iloc[0]["match_id"], 1)
+        self.assertEqual(value.iloc[0]["selection_mode"], "value")
+        self.assertEqual(conservative.iloc[0]["selection_mode"], "conservative")
+
+    def test_selection_mode_rejects_unknown_mode(self):
+        candidates = pd.DataFrame([_candidate(1, "1x2", "1", True, 0.60, 0.50, 2.0)])
+
+        with self.assertRaises(ValueError):
+            select_value_bets(candidates, min_edge=0.0, selection_mode="unknown")
+
 
 def _candidate(
     match_id,

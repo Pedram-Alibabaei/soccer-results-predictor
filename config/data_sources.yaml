@@ -19,6 +19,18 @@ sources:
     role: "Historical men's international match results."
     priority: "high"
 
+  statsbomb_open_data:
+    url: "https://github.com/statsbomb/open-data"
+    role: "Auditable historical starting XIs and positions for selected international tournaments."
+    priority: "high"
+    note: "Credit StatsBomb when publishing analysis based on the open data."
+
+  transfermarkt_datasets:
+    url: "https://github.com/dcaribou/transfermarkt-datasets"
+    role: "CC0 structured historical player valuations used as a dated player-strength proxy."
+    priority: "high"
+    note: "Join only valuations dated on or before kickoff."
+
   football_data_uk_world_cup_qualifying:
     url: "https://www.football-data.co.uk/data.php"
     role: "Some historical football results and betting odds; especially useful for odds/backtesting formats."

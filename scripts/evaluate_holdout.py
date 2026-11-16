@@ -14,6 +14,7 @@ from soccer_predictor.modeling import (
     majority_class_probabilities,
     write_holdout_report,
 )
+from soccer_predictor.elo import add_elo_features, fit_elo_state
 
 
 def parse_args() -> argparse.Namespace:
@@ -47,6 +48,11 @@ def parse_args() -> argparse.Namespace:
         default="source_result",
         help="source_result uses source scores; clean_3way uses corrected 90-minute scores; qualification uses knockout advancement labels.",
     )
+    parser.add_argument(
+        "--live-tournament-ratings",
+        action="store_true",
+        help="Update test Elo/rolling features after each completed holdout match, matching in-tournament forecasting.",
+    )
     return parser.parse_args()
 
 
@@ -59,6 +65,8 @@ def main() -> None:
 
     train = pd.read_csv(train_path, parse_dates=["date"], low_memory=False)
     test = pd.read_csv(test_path, parse_dates=["date"], low_memory=False)
+    if args.live_tournament_ratings:
+        test = apply_live_tournament_ratings(train, test)
     train, test = apply_target_filter(train, test, args.target)
     labels = ("1", "2") if args.target == "qualification" else ("1", "X", "2")
     if args.target == "qualification" and args.model != "softmax":
@@ -118,11 +126,15 @@ def main() -> None:
     majority_metrics = evaluate_predictions(test["result"], majority_probabilities, labels=labels)
 
     target_suffix = "" if args.target == "source_result" else f"_{args.target}"
-    report_path = report_dir / f"{args.holdout}_{args.model}{target_suffix}_report.md"
-    predictions_path = report_dir / f"{args.holdout}_{args.model}{target_suffix}_predictions.csv"
+    live_suffix = "_live" if args.live_tournament_ratings else ""
+    report_path = report_dir / f"{args.holdout}_{args.model}{target_suffix}{live_suffix}_report.md"
+    predictions_path = report_dir / f"{args.holdout}_{args.model}{target_suffix}{live_suffix}_predictions.csv"
     write_holdout_report(
         report_path,
-        title=f"{args.holdout.replace('_', ' ').title()} {model_name} Report ({args.target})",
+        title=(
+            f"{args.holdout.replace('_', ' ').title()} {model_name} Report "
+            f"({args.target}{', live tournament ratings' if args.live_tournament_ratings else ''})"
+        ),
         train=train,
         test=test,
         model_probabilities=model_probabilities,
@@ -141,6 +153,8 @@ def main() -> None:
     )
 
     print(f"Evaluated {args.holdout} with {args.model} for {args.target}")
+    if args.live_tournament_ratings:
+        print("  mode: live tournament ratings")
     print(f"  train rows: {len(train)}")
     print(f"  test rows: {len(test)}")
     print("  majority baseline:")
@@ -177,6 +191,17 @@ def write_predictions_csv(
     predictions["correct"] = predictions["result"] == predictions["predicted"]
     path.parent.mkdir(parents=True, exist_ok=True)
     predictions.to_csv(path, index=False)
+
+
+def apply_live_tournament_ratings(train: pd.DataFrame, test: pd.DataFrame) -> pd.DataFrame:
+    """Recompute holdout test features as if forecasting match-by-match live."""
+
+    pre_tournament_state = fit_elo_state(train)
+    return add_elo_features(
+        test,
+        initial_state=pre_tournament_state,
+        update_ratings=True,
+    )
 
 
 def apply_target_filter(

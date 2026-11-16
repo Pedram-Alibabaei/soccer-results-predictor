@@ -115,6 +115,33 @@ class DataPipelineTests(unittest.TestCase):
         self.assertFalse(with_context.loc[48, "is_clean_3way_result"])
         self.assertEqual(with_context.loc[63, "world_cup_stage"], "final")
 
+    def test_world_cup_context_supports_104_match_format(self):
+        rows = []
+        for match_number in range(1, 105):
+            rows.append(
+                _match(
+                    match_number,
+                    f"2026-06-{1 + ((match_number - 1) // 4):02d}",
+                    f"Home {match_number}",
+                    f"Away {match_number}",
+                    1,
+                    0,
+                    "FIFA World Cup",
+                )
+            )
+        matches = pd.DataFrame(rows)
+        matches["date"] = pd.to_datetime(matches["date"])
+
+        with_context = add_world_cup_context(matches)
+
+        self.assertEqual(with_context.loc[71, "world_cup_stage"], "group")
+        self.assertEqual(with_context.loc[72, "world_cup_stage"], "round_of_32")
+        self.assertEqual(with_context.loc[88, "world_cup_stage"], "round_of_16")
+        self.assertEqual(with_context.loc[96, "world_cup_stage"], "quarter_final")
+        self.assertEqual(with_context.loc[100, "world_cup_stage"], "semi_final")
+        self.assertEqual(with_context.loc[102, "world_cup_stage"], "third_place")
+        self.assertEqual(with_context.loc[103, "world_cup_stage"], "final")
+
     def test_world_cup_settlement_overrides_market_result(self):
         matches = pd.DataFrame(
             [

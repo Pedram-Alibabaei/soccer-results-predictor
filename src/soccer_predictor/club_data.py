@@ -20,6 +20,7 @@ CLUB_RAW_DIR = "club_odds"
 CLUB_PROCESSED_DIR = "club_odds"
 CLUB_MATCHES_FILE = "club_matches.csv"
 CLUB_FEATURES_FILE = "club_matches_with_elo_features.csv"
+CLUB_COVERAGE_FILE = "club_data_coverage.csv"
 CLUB_METADATA_FILE = "club_dataset_metadata.json"
 
 
@@ -32,12 +33,17 @@ class LeagueConfig:
 
 DEFAULT_LEAGUES = (
     LeagueConfig("E0", "Premier League", "England"),
+    LeagueConfig("E1", "Championship", "England"),
     LeagueConfig("SP1", "La Liga", "Spain"),
     LeagueConfig("I1", "Serie A", "Italy"),
     LeagueConfig("D1", "Bundesliga", "Germany"),
     LeagueConfig("F1", "Ligue 1", "France"),
+    LeagueConfig("N1", "Eredivisie", "Netherlands"),
+    LeagueConfig("P1", "Primeira Liga", "Portugal"),
+    LeagueConfig("B1", "Belgian Pro League", "Belgium"),
+    LeagueConfig("SC0", "Scottish Premiership", "Scotland"),
 )
-DEFAULT_SEASON_START_YEARS = tuple(range(2019, 2025))
+DEFAULT_SEASON_START_YEARS = tuple(range(2019, 2026))
 
 RESULT_MAP = {"H": "1", "D": "X", "A": "2"}
 
@@ -156,10 +162,12 @@ def build_club_odds_dataset(
     output_paths = {
         "matches": processed_dir / CLUB_MATCHES_FILE,
         "features": processed_dir / CLUB_FEATURES_FILE,
+        "coverage": processed_dir / CLUB_COVERAGE_FILE,
         "metadata": processed_dir / CLUB_METADATA_FILE,
     }
     matches.to_csv(output_paths["matches"], index=False)
     features.to_csv(output_paths["features"], index=False)
+    summarize_club_data_coverage(matches).to_csv(output_paths["coverage"], index=False)
     write_club_metadata(
         output_paths["metadata"],
         matches=matches,
@@ -399,6 +407,48 @@ def summarize_club_dataset(dataset: pd.DataFrame) -> dict[str, object]:
         "rows_with_1x2_odds": int(dataset["has_1x2_odds"].sum()),
         "rows_with_ou_2_5_odds": int(dataset["has_ou_2_5_odds"].sum()),
     }
+
+
+def summarize_club_data_coverage(dataset: pd.DataFrame) -> pd.DataFrame:
+    """Summarize model-feature and odds coverage for every league-season."""
+
+    rows: list[dict[str, object]] = []
+    group_columns = ["season_start_year", "league_code", "league_name", "country"]
+    for keys, group in dataset.groupby(group_columns, sort=True, dropna=False):
+        season, league_code, league_name, country = keys
+        matches = len(group)
+        shots_complete = group[
+            ["home_shots", "away_shots", "home_shots_on_target", "away_shots_on_target"]
+        ].notna().all(axis=1)
+        open_1x2 = group["has_open_1x2_odds"].fillna(False).astype(bool)
+        close_1x2 = group["has_close_1x2_odds"].fillna(False).astype(bool)
+        open_ou = group["has_open_ou_2_5_odds"].fillna(False).astype(bool)
+        close_ou = group["has_close_ou_2_5_odds"].fillna(False).astype(bool)
+        comparable = open_1x2 & close_1x2 & open_ou & close_ou
+        rows.append(
+            {
+                "season_start_year": int(season),
+                "league_code": league_code,
+                "league_name": league_name,
+                "country": country,
+                "matches": matches,
+                "first_match": group["date"].min().date().isoformat(),
+                "last_match": group["date"].max().date().isoformat(),
+                "open_1x2_rows": int(open_1x2.sum()),
+                "open_1x2_rate": float(open_1x2.mean()),
+                "close_1x2_rows": int(close_1x2.sum()),
+                "close_1x2_rate": float(close_1x2.mean()),
+                "open_ou_2_5_rows": int(open_ou.sum()),
+                "open_ou_2_5_rate": float(open_ou.mean()),
+                "close_ou_2_5_rows": int(close_ou.sum()),
+                "close_ou_2_5_rate": float(close_ou.mean()),
+                "shot_stat_rows": int(shots_complete.sum()),
+                "shot_stat_rate": float(shots_complete.mean()),
+                "fully_comparable_rows": int(comparable.sum()),
+                "fully_comparable_rate": float(comparable.mean()),
+            }
+        )
+    return pd.DataFrame(rows)
 
 
 def write_club_metadata(

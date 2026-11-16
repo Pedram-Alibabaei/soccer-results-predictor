@@ -5,6 +5,7 @@ from soccer_predictor.markets import (
     double_chance,
     expected_value,
     match_result_and_over_under,
+    negative_binomial_score_matrix,
     over_under,
     remove_vig,
     score_matrix,
@@ -81,6 +82,37 @@ class MarketTests(unittest.TestCase):
         self.assertAlmostEqual(adjusted["1"], independent["1"], places=12)
         self.assertAlmostEqual(adjusted["X"], independent["X"], places=12)
         self.assertAlmostEqual(adjusted["2"], independent["2"], places=12)
+
+    def test_zero_dispersion_matches_independent_poisson(self):
+        independent = score_matrix(1.7, 1.2, max_goals=15)
+        overdispersed = negative_binomial_score_matrix(
+            1.7,
+            1.2,
+            dispersion=0.0,
+            max_goals=15,
+        )
+
+        for home_goals, away_goals, probability in independent.scores():
+            self.assertAlmostEqual(
+                overdispersed.probability(home_goals, away_goals),
+                probability,
+                places=12,
+            )
+
+    def test_negative_binomial_has_a_heavier_total_goals_tail(self):
+        independent = score_matrix(1.7, 1.2, max_goals=15)
+        overdispersed = negative_binomial_score_matrix(
+            1.7,
+            1.2,
+            dispersion=0.25,
+            max_goals=15,
+        )
+
+        self.assertAlmostEqual(overdispersed.total_probability, 1.0, places=12)
+        self.assertGreater(
+            over_under(overdispersed, 5.5)["+"],
+            over_under(independent, 5.5)["+"],
+        )
 
 
 if __name__ == "__main__":

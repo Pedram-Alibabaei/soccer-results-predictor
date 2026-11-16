@@ -306,15 +306,23 @@ def select_value_bets(
     max_bets_per_weekend: int | None = None,
     edge_column: str = "value_edge",
     probability_column: str = "value_probability",
+    selection_mode: str = "conservative",
+    min_probability: float | None = None,
     secondary_probability_column: str | None = None,
     min_secondary_probability: float | None = None,
 ) -> pd.DataFrame:
+    if selection_mode not in {"value", "conservative"}:
+        raise ValueError("selection_mode must be 'value' or 'conservative'.")
     if scored_candidates.empty:
         return empty_selected_bets_frame()
 
     selected = scored_candidates[scored_candidates[edge_column] >= min_edge].copy()
     if max_decimal_odds is not None:
         selected = selected[selected["decimal_odds"] <= max_decimal_odds].copy()
+    if min_probability is not None:
+        selected = selected[
+            pd.to_numeric(selected[probability_column], errors="coerce") >= min_probability
+        ].copy()
     if secondary_probability_column is not None and min_secondary_probability is not None:
         selected = selected[
             pd.to_numeric(selected[secondary_probability_column], errors="coerce")
@@ -323,22 +331,27 @@ def select_value_bets(
     if selected.empty:
         return empty_selected_bets_frame()
 
+    ranking_columns = (
+        [edge_column, probability_column]
+        if selection_mode == "value"
+        else [probability_column, edge_column]
+    )
     selected = selected.sort_values(
-        ["date", "match_id", "market", probability_column, edge_column],
+        ["date", "match_id", "market", *ranking_columns],
         ascending=[True, True, True, False, False],
     )
     if max_bets_per_match_market > 0:
         selected = selected.groupby(["match_id", "market"], group_keys=False).head(max_bets_per_match_market)
     if max_bets_per_match > 0:
         selected = selected.sort_values(
-            ["date", "match_id", probability_column, edge_column],
+            ["date", "match_id", *ranking_columns],
             ascending=[True, True, False, False],
         )
         selected = selected.groupby("match_id", group_keys=False).head(max_bets_per_match)
     if max_bets_per_weekend is not None and max_bets_per_weekend > 0:
         selected["weekend"] = weekend_key(selected["date"])
         selected = selected.sort_values(
-            ["weekend", probability_column, edge_column],
+            ["weekend", *ranking_columns],
             ascending=[True, False, False],
         )
         selected = selected.groupby("weekend", group_keys=False).head(max_bets_per_weekend)
@@ -348,6 +361,7 @@ def select_value_bets(
     selected["settled_profit"] = selected["profit"] * stake
     selected["selected_probability"] = selected[probability_column]
     selected["selected_edge"] = selected[edge_column]
+    selected["selection_mode"] = selection_mode
     return selected.reset_index(drop=True)
 
 
@@ -411,6 +425,8 @@ def summarize_thresholds(
     stake: float,
     max_decimal_odds: float | None = None,
     max_bets_per_weekend: int | None = None,
+    selection_mode: str = "conservative",
+    min_probability: float | None = None,
     secondary_probability_column: str | None = None,
     min_secondary_probability: float | None = None,
 ) -> pd.DataFrame:
@@ -422,12 +438,22 @@ def summarize_thresholds(
             stake=stake,
             edge_column=edge_column,
             probability_column=probability_column,
+            selection_mode=selection_mode,
+            min_probability=min_probability,
             max_decimal_odds=max_decimal_odds,
             max_bets_per_weekend=max_bets_per_weekend,
             secondary_probability_column=secondary_probability_column,
             min_secondary_probability=min_secondary_probability,
         )
-        rows.append({"min_edge": threshold, **summarize_selected_bets(bets), **summarize_clv(bets)})
+        rows.append(
+            {
+                "selection_mode": selection_mode,
+                "min_probability": min_probability or 0.0,
+                "min_edge": threshold,
+                **summarize_selected_bets(bets),
+                **summarize_clv(bets),
+            }
+        )
     return pd.DataFrame(rows)
 
 
@@ -441,6 +467,8 @@ def summarize_combined_thresholds(
     stake: float,
     max_decimal_odds: float | None = None,
     max_bets_per_weekend: int | None = None,
+    selection_mode: str = "conservative",
+    min_probability: float | None = None,
 ) -> pd.DataFrame:
     rows = []
     for edge_threshold in edge_thresholds:
@@ -451,6 +479,8 @@ def summarize_combined_thresholds(
                 stake=stake,
                 edge_column=edge_column,
                 probability_column=probability_column,
+                selection_mode=selection_mode,
+                min_probability=min_probability,
                 max_decimal_odds=max_decimal_odds,
                 max_bets_per_weekend=max_bets_per_weekend,
                 secondary_probability_column="clv_model_probability",
@@ -458,6 +488,8 @@ def summarize_combined_thresholds(
             )
             rows.append(
                 {
+                    "selection_mode": selection_mode,
+                    "min_probability": min_probability or 0.0,
                     "min_edge": edge_threshold,
                     "min_clv_model_probability": clv_threshold,
                     **summarize_selected_bets(bets),

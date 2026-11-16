@@ -80,3 +80,35 @@ Tournament holdouts are written to `data/processed/tournament_holdouts/`.
 - `world_cup_2022_test.csv`: 2022 World Cup finals matches only.
 
 The holdout test features use the pre-tournament Elo state. They do not update ratings with earlier rows from the same tournament.
+
+## Confirmed-Lineup Files
+
+Confirmed-lineup outputs are written to `data/processed/lineups/` and are valid
+only after both official starting XIs are known.
+
+- `international_starting_xi.csv`: One row per starter, including StatsBomb ID,
+  position, Transfermarkt match audit, valuation date, and market value.
+- `international_lineup_features.csv`: One row per match with rotation,
+  continuity, and positional-strength features.
+- `player_matching_audit.csv`: Unique cross-provider identity decisions and
+  confidence scores.
+- `lineup_features_metadata.json`: Sources, license, coverage, and leakage rule.
+
+Important match-level fields:
+
+- `has_confirmed_lineups`: Both teams have exactly eleven starters.
+- `*_previous_lineup_available_pre`: A prior XI exists within the same tournament.
+- `*_lineup_changes_pre`: Current starters absent from the previous XI.
+- `*_goalkeeper_changed_pre`: The previous starting goalkeeper was replaced.
+- `*_defensive_continuity_pre`: Current goalkeeper/defender overlap with the prior unit.
+- `*_attacking_continuity_pre`: Current midfielder/attacker overlap with the prior unit.
+- `*_goalkeeper_strength_pre`, `*_defense_strength_pre`,
+  `*_midfield_strength_pre`, `*_attack_strength_pre`: Mean log market value for
+  the named positional unit.
+- `*_strength_change_pre`: Current positional or full-XI strength minus the
+  previous tournament lineup's strength.
+- `*_player_strength_coverage_pre`: Share of starters with a dated valuation.
+
+Missing player values are imputed from the same tournament and positional unit,
+while the original coverage remains visible. Valuations after kickoff are never
+used.
