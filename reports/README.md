@@ -2,6 +2,14 @@
 
 This folder now keeps only the current reference reports.
 
+Tracked Markdown files are compact historical research artifacts, not results
+automatically reproduced by cloning the repository. Detailed CSV/JSON outputs and
+archived experiments listed below are local, generated files and are not committed
+to Git. Their names describe expected artifacts rather than downloadable files.
+The [data guide](../data/README.md) explains the untracked curated inputs needed
+for some international experiments. Rebuilding against changed upstream datasets
+can change coverage and metrics.
+
 ## Current Club Research
 
 The current model architecture is:
@@ -13,7 +21,7 @@ The current model architecture is:
 - Maximum club bets per weekend: `3`
 - CLV check against closing odds
 
-Current active files:
+Current club reference artifacts (Markdown tracked; CSV generated locally):
 
 - `club_data_coverage_report.md`
 - `expanded_betting_validation_summary.md`
@@ -45,7 +53,7 @@ The CLV-prediction filter was tested as a second approval layer. It is not the a
 
 ## Current World Cup Reference
 
-The World Cup reports are kept only as national-team probability references. They are not betting-ready because historical World Cup odds are not yet integrated.
+The World Cup reports are kept only as national-team probability references. They are not betting-ready because historical World Cup odds are not yet integrated. Reproducing the corrected full-tournament results requires `data/external/world_cup_settlements.csv`; contextual V3 also requires `data/external/world_cup_third_place_regulation.csv`. Neither curated input is included in Git. See the [research guide](../docs/research-guide.md) before running these experiments.
 
 - `world_cup_2018_poisson_clean_3way_report.md`
 - `world_cup_2018_poisson_clean_3way_live_report.md`
